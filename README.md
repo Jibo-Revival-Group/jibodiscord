@@ -1,6 +1,6 @@
 # Jibo Discord Bot
 
-A Python Discord bot that lets you talk to **Jibo** using `/ask` or `!ask`. Responses are driven by [OpenJibo](https://github.com/openjibo/OpenJibo) — the open-source cloud replacement for physical Jibo robots.
+A Python Discord bot that lets you talk to **Jibo** using `/ask` or `!ask`. Responses are driven by [OpenJibo](https://github.com/Jibo-Revival-Group/OpenJibo) — the open-source cloud replacement for physical Jibo robots.
 
 ## How it works
 

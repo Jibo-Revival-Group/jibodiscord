@@ -1,6 +1,6 @@
 # Jibo Discord Bot
 
-A Python Discord bot that lets you talk to **Jibo** using `/ask` or `!ask`. Responses are driven by [OpenJibo](https://github.com/Jibo-Revival-Group/JiboExperiments) — the open-source cloud replacement for physical Jibo robots.
+A Python Discord bot that lets you talk to **Jibo** using `/ask` or `!ask`, and ask an AI grounded in Discord community history with `/ai` or `!ai`. Jibo responses are driven by [OpenJibo](https://github.com/Jibo-Revival-Group/JiboExperiments) — the open-source cloud replacement for physical Jibo robots.
 
 ## How it works
 
@@ -38,8 +38,12 @@ cp .env.example .env
 Edit `.env`:
 
 - `DISCORD_TOKEN` — your bot token
+- `DISCORD_GUILD_ID` — Discord server snowflake ID; the bot only stays in this guild and leaves any other server it joins
 - `OPENJIBO_PATH` — path to your OpenJibo checkout (default: `~/JiboExperiments/OpenJibo`). Used for `.mim` response data and API settings from `appsettings.json`.
 - `USE_FUN_FACT_API` — set to `false` to use only local fun-fact fallbacks
+- `OPENAI_API_KEY` — required for `/ai` and `!ai` (falls back to a `chatgpt!KEY` value from knowledge search settings if unset)
+- `OPENAI_AI_MODEL` — model for `/ai` (default: `gpt-4.1-mini`)
+- `OPENAI_VECTOR_STORE_ID` — Discord history vector store (default: `vs_6a5a46ef89408191bb8ce3cf2a6f132d`)
 
 When `OPENJIBO_PATH` points at a real OpenJibo checkout, the bot automatically loads API keys from `src/Jibo.Cloud/dotnet/src/Jibo.Cloud.Api/appsettings.json`:
 
@@ -50,8 +54,11 @@ When `OPENJIBO_PATH` points at a real OpenJibo checkout, the bot automatically l
 | Dictionary | `OpenJibo:Dictionary:FreeDictionaryApi` | `FREE_DICTIONARY_BASE_URL` |
 | News | `OpenJibo:News:NewsApi` | `NEWSAPI_KEY`, etc. |
 | Knowledge search | `OpenJibo:Search` | `OPENJIBO_SEARCH_BACKEND`, `OPENJIBO_SEARCH_FALLBACK` |
+| Discord AI (`/ai`) | — | `OPENAI_API_KEY`, `OPENAI_AI_MODEL`, `OPENAI_VECTOR_STORE_ID` |
 
 Knowledge search uses OpenJibo's backend spec format, e.g. `wolfram!APPID`, `chatgpt!APIKEY!MODEL`, or `ollama!http://127.0.0.1:11434!llama3.1:8b`. The default OpenJibo config sets `Primary` to `none`, so search is off unless you configure it.
+
+`/ai` and `!ai` use OpenAI's Responses API with `file_search` against a vector store of every message sent to the Jibo Discord, so answers lean on community troubleshooting and common Q&A.
 
 ### 4. Run
 
@@ -65,6 +72,8 @@ python bot.py
 |---------|---------|
 | Slash | `/ask tell me a joke` |
 | Prefix | `!ask what is your favorite color` |
+| AI (Discord history) | `/ai how do I fix Wi-Fi on Jibo?` |
+| AI prefix | `!ai how do I fix Wi-Fi on Jibo?` |
 
 ### Example questions
 
@@ -100,7 +109,7 @@ If OpenJibo is not found, the bot still runs using the embedded seed catalog.
 ## Project layout
 
 ```
-bot.py              Discord entry point (/ask and !ask)
+bot.py              Discord entry point (/ask, !ask, /ai, !ai)
 jibo/
   engine.py         Main Jibo brain — intent → reply
   intent_router.py  Phrase-based semantic intent routing
@@ -108,7 +117,7 @@ jibo/
   seed_catalog.py   Inline seed responses from OpenJibo
   normalize.py      Transcript normalization
   config.py         Settings (auto-loaded from OpenJibo appsettings.json)
-  providers/        External API clients (weather, news, dictionary, search, fun facts)
+  providers/        External API clients (weather, news, dictionary, search, fun facts, Discord RAG)
   parsers/          Math, dice, and define command parsers
   weather/          Weather parsing, provider, and spoken reply formatting
   news/             News headline formatting

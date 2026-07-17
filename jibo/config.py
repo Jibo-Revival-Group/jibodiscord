@@ -136,3 +136,29 @@ OPENJIBO_SEARCH_FAILURE_CACHE_TTL_SECONDS = resolve_int_setting(
     "FailureCacheTtlSeconds",
     45,
 )
+
+
+def _chatgpt_api_key_from_search_backend() -> str | None:
+    """Extract an OpenAI key from OpenJibo chatgpt!KEY[!MODEL] search specs."""
+    for value in (OPENJIBO_SEARCH_BACKEND, OPENJIBO_SEARCH_FALLBACK):
+        if not value:
+            continue
+        parts = value.split("!")
+        if len(parts) >= 2 and parts[0].strip().lower() == "chatgpt":
+            key = parts[1].strip()
+            if key:
+                return key
+    return None
+
+
+# Discord RAG (/ai, !ai) — Responses API + file_search
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") or _chatgpt_api_key_from_search_backend()
+OPENAI_AI_MODEL = os.environ.get("OPENAI_AI_MODEL", "gpt-4.1-mini")
+OPENAI_VECTOR_STORE_ID = os.environ.get(
+    "OPENAI_VECTOR_STORE_ID",
+    "vs_6a5a46ef89408191bb8ce3cf2a6f132d",
+)
+
+# Only stay in / respond in this guild; leave all others
+_raw_guild_id = os.environ.get("DISCORD_GUILD_ID", "").strip()
+DISCORD_GUILD_ID: int | None = int(_raw_guild_id) if _raw_guild_id.isdigit() else None

@@ -19,7 +19,11 @@ every message sent to the Jibo Discord. Prefer concrete troubleshooting steps,
 workarounds, and answers that community members have shared.
 
 Rules:
-- Keep answers under 15 sentences.
+- Use file_search for Jibo troubleshooting, how-tos, and factual community questions.
+- Skip file_search for greetings, thanks, and meta questions like "what can you do?".
+- Keep answers under 8 sentences.
+- ABSOLUTE HARD LIMIT: Keep responses strictly under 1,400 characters. If your response exceeds 1,500 characters, it will be cut off and so will your bloodline.
+- If a response is becoming too long, stop explaining, drop fluff, and summarize the final fix into bullet points immediately.
 - Prefer newer and more stable fixes or methods when sources disagree or several approaches exist.
 - Be clear and concise. Use plain Discord-friendly text (no markdown tables).
 - When the store has relevant discussion, synthesize the useful parts.
@@ -85,7 +89,7 @@ class DiscordRagService:
                     "vector_store_ids": [self.vector_store_id],
                 }
             ],
-            "tool_choice": {"type": "file_search"},
+            "tool_choice": "auto",
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",

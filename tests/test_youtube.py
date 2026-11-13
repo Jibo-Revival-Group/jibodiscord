@@ -12,7 +12,7 @@ FEED = """<?xml version="1.0" encoding="UTF-8"?>
 
 class YouTubeTest(unittest.TestCase):
     def test_feed_ids_oldest_first(self):
-        self.assertEqual(youtube.parse_feed(FEED), ["older", "newest"])
+        self.assertEqual(youtube.parse_feed(FEED), ("Someone", [{"id": "older", "title": "A"}, {"id": "newest", "title": "B"}]))
 
     def test_first_check_posts_nothing_then_only_new(self):
         seen = {}

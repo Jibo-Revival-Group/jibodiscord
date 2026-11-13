@@ -16,11 +16,14 @@ FEED_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
 _NS = {"a": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015"}
 
 
-def parse_feed(xml_text: str) -> list[str]:
-    """Video IDs in a channel feed, oldest first."""
-    entries = ET.fromstring(xml_text).findall("a:entry", _NS)
-    ids = [e.findtext("yt:videoId", namespaces=_NS) for e in entries]
-    return [i for i in reversed(ids) if i]
+def parse_feed(xml_text: str) -> tuple[str, list[dict[str, str]]]:
+    """A channel feed -> (the channel's display name, its videos oldest first as {"id", "title"})."""
+    feed = ET.fromstring(xml_text)
+    videos = [
+        {"id": e.findtext("yt:videoId", namespaces=_NS), "title": (e.findtext("a:title", namespaces=_NS) or "").strip()}
+        for e in feed.findall("a:entry", _NS)
+    ]
+    return (feed.findtext("a:title", namespaces=_NS) or "").strip(), [v for v in reversed(videos) if v["id"]]
 
 
 def new_videos(seen: dict[str, list[str]], channel: str, ids: list[str]) -> list[str]:

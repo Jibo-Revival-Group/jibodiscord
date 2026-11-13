@@ -17,7 +17,7 @@ already there, so nothing old is posted when the bot is first started or a chann
 1. In the [Discord Developer Portal](https://discord.com/developers/applications), create an application with a bot and copy its
    token. No privileged intents are needed.
 2. Invite it to the server with the `bot` scope. In the social-media channel it needs View Channel, Send Messages and
-   Mention Everyone (or make the ping role mentionable).
+   Embed Links and Mention Everyone (or make the ping role mentionable).
 3. Install and configure:
 
 ```bash

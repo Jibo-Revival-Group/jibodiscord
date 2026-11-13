@@ -58,14 +58,22 @@ async def check_youtube() -> None:
             try:
                 async with http.get(youtube.FEED_URL.format(channel_id)) as response:
                     response.raise_for_status()
-                    ids = youtube.parse_feed(await response.text())
+                    name, videos = youtube.parse_feed(await response.text())
             except Exception as exc:  # one channel's feed failing must not stop the others
                 log.warning("Feed check failed for %s: %s", handle, exc)
                 continue
-            for video_id in youtube.new_videos(seen, handle, ids):
+            name = name or handle
+            titles = {v["id"]: v["title"] for v in videos}
+            for video_id in youtube.new_videos(seen, handle, list(titles)):
+                url = f"https://www.youtube.com/watch?v={video_id}"
+                embed = discord.Embed(title=titles[video_id] or "New video", url=url, color=0xFF0000)
+                embed.set_author(name=name, url=f"https://www.youtube.com/channel/{channel_id}")
+                embed.set_image(url=f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
                 try:
+                    # <link> keeps the link in the message without a second preview; it still works if embeds are not allowed
                     await channel.send(
-                        f"<@&{YOUTUBE_PING_ROLE_ID}> {handle} just released a new video: https://www.youtube.com/watch?v={video_id}",
+                        f"<@&{YOUTUBE_PING_ROLE_ID}> **{name}** just released a new video! <{url}>",
+                        embed=embed,
                         allowed_mentions=discord.AllowedMentions(roles=True),
                     )
                     log.info("Posted %s from %s", video_id, handle)

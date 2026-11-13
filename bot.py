@@ -63,11 +63,15 @@ async def check_youtube() -> None:
                 log.warning("Feed check failed for %s: %s", handle, exc)
                 continue
             for video_id in youtube.new_videos(seen, handle, ids):
-                await channel.send(
-                    f"<@&{YOUTUBE_PING_ROLE_ID}> {handle} just released a new video: https://www.youtube.com/watch?v={video_id}",
-                    allowed_mentions=discord.AllowedMentions(roles=True),
-                )
-                log.info("Posted %s from %s", video_id, handle)
+                try:
+                    await channel.send(
+                        f"<@&{YOUTUBE_PING_ROLE_ID}> {handle} just released a new video: https://www.youtube.com/watch?v={video_id}",
+                        allowed_mentions=discord.AllowedMentions(roles=True),
+                    )
+                    log.info("Posted %s from %s", video_id, handle)
+                except discord.HTTPException as exc:  # e.g. no permission: forget it again so the next check retries
+                    seen[handle].remove(video_id)
+                    log.error("Could not post %s from %s: %s", video_id, handle, exc)
             save_seen(seen)  # after each channel, so a crash never re-posts what was already sent
 
 

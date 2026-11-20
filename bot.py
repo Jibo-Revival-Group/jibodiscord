@@ -31,8 +31,6 @@ YOUTUBE_PING_ROLE_ID = 1570893128448213032
 SEEN_FILE = Path(__file__).with_name("youtube-seen.json")  # video IDs already handled, per channel
 REDDIT_PING_ROLE_ID = YOUTUBE_PING_ROLE_ID
 REDDIT_SEEN_KEY = "reddit"  # Reddit post IDs share the state file with the YouTube channels
-REDDIT_CLIENT_ID = os.environ.get("REDDIT_CLIENT_ID", "")
-REDDIT_SECRET = os.environ.get("REDDIT_SECRET", "")
 
 client = discord.Client(intents=discord.Intents.default())
 tree = app_commands.CommandTree(client)  # holds no commands; syncing it removes the old /ask and /ai
@@ -88,21 +86,15 @@ async def check_youtube() -> None:
             save_seen(seen)  # after each channel, so a crash never re-posts what was already sent
 
 
-@tasks.loop(minutes=1)
+@tasks.loop(minutes=5)  # each check starts a headless browser; Reddit throttles frequent visitors
 async def check_reddit() -> None:
     channel = client.get_channel(SOCIAL_MEDIA_CHANNEL_ID)
     if channel is None:
         return
     seen = load_seen()
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as http:
-            access = await reddit.token(http, REDDIT_CLIENT_ID, REDDIT_SECRET)
-            headers = {"Authorization": f"bearer {access}", "User-Agent": reddit.USER_AGENT}
-            async with http.get(reddit.NEW_URL, headers=headers) as response:
-                response.raise_for_status()
-                posts = reddit.parse_listing(await response.json())
-    except Exception as exc:  # a Reddit outage must not stop the loop
-        reddit._token["value"] = None  # a rejected token is fetched again next time
+        posts = await reddit.fetch_new()
+    except Exception as exc:  # a Reddit outage or block must not stop the loop
         log.warning("Reddit check failed: %s", exc)
         return
     by_id = {p["id"]: p for p in posts}
@@ -135,10 +127,9 @@ async def on_ready() -> None:
     await tree.sync()
     if not check_youtube.is_running():
         check_youtube.start()
-    if REDDIT_CLIENT_ID and REDDIT_SECRET and not check_reddit.is_running():
+    if not check_reddit.is_running():
         check_reddit.start()
-    log.info("Logged in as %s, following %d YouTube channels and %s", client.user, len(youtube.CHANNELS),
-             "r/" + ", r/".join(reddit.SUBREDDITS) if check_reddit.is_running() else "no subreddits (REDDIT_CLIENT_ID/REDDIT_SECRET not set)")
+    log.info("Logged in as %s, following %d YouTube channels and r/%s", client.user, len(youtube.CHANNELS), ", r/".join(reddit.SUBREDDITS))
 
 
 @client.event

@@ -7,7 +7,7 @@ social-media channel and pings the YouTube ping role.
 
 Every minute it reads each channel's public YouTube feed (no API key needed). A video it has not seen before gets one post.
 
-It also posts new posts from r/Jibo and r/JiboRevival (same channel and ping role). Reddit's public feeds no longer work, so this needs a "script" app from reddit.com/prefs/apps: put its ID and secret in `.env` as `REDDIT_CLIENT_ID` and `REDDIT_SECRET`. Without them the bot only follows YouTube.
+It also posts new posts from r/Jibo and r/JiboRevival every 5 minutes (same channel and ping role). Reddit blocks feeds and plain HTTP, so a headless Chromium reads each subreddit's /new page. After installing the requirements, run `.venv/bin/playwright install --with-deps chromium-headless-shell` once.
 The videos it has seen are kept in `youtube-seen.json` next to `bot.py`. The first check of a channel only records what is
 already there, so nothing old is posted when the bot is first started or a channel is added.
 

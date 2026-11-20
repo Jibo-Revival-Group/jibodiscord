@@ -2,25 +2,21 @@ import unittest
 
 import reddit
 
-LISTING = {"data": {"children": [
-    {"data": {"id": "b2", "title": " Newer ", "author": "zane", "subreddit": "JiboRevival", "permalink": "/r/JiboRevival/comments/b2/x/",
-              "preview": {"images": [{"source": {"url": "https://preview.redd.it/p.jpg"}}]}}},
-    {"data": {"id": "a1", "title": "Older", "author": None, "subreddit": "Jibo", "permalink": "/r/Jibo/comments/a1/y/"}},
-    {"data": {}},
-]}}
+RAW = [
+    {"id": "t3_b2", "title": " Newer ", "author": "zane", "permalink": "/r/Jibo/comments/b2/x/", "type": "image", "href": "https://i.redd.it/p.jpg"},
+    {"id": "t3_a1", "title": "Older", "author": None, "permalink": "/r/Jibo/comments/a1/y/", "type": "text", "href": "https://www.reddit.com/r/Jibo/comments/a1/y/"},
+    {"id": "ad-123", "title": "Promoted", "permalink": ""},
+]
 
 
 class RedditTest(unittest.TestCase):
-    def test_listing_oldest_first(self):
-        self.assertEqual(reddit.parse_listing(LISTING), [
+    def test_posts_oldest_first_without_ads(self):
+        self.assertEqual(reddit.to_posts("Jibo", RAW), [
             {"id": "a1", "title": "Older", "author": "[deleted]", "subreddit": "Jibo",
              "url": "https://www.reddit.com/r/Jibo/comments/a1/y/", "image": ""},
-            {"id": "b2", "title": "Newer", "author": "zane", "subreddit": "JiboRevival",
-             "url": "https://www.reddit.com/r/JiboRevival/comments/b2/x/", "image": "https://preview.redd.it/p.jpg"},
+            {"id": "b2", "title": "Newer", "author": "zane", "subreddit": "Jibo",
+             "url": "https://www.reddit.com/r/Jibo/comments/b2/x/", "image": "https://i.redd.it/p.jpg"},
         ])
-
-    def test_both_subreddits_in_one_request(self):
-        self.assertIn("/r/Jibo+JiboRevival/new", reddit.NEW_URL)
 
 
 if __name__ == "__main__":

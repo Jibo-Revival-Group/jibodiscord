@@ -1,44 +1,44 @@
-"""New-post detection for the followed subreddits through Reddit's official API (public feeds no longer work)."""
+"""New-post detection for the followed subreddits. Reddit blocks plain HTTP clients (no feeds, no JSON, and its
+API needs approval), so a headless Chromium loads each subreddit's /new page and reads the posts it shows."""
 
-import time
-
-import aiohttp
+from playwright.async_api import async_playwright
 
 SUBREDDITS = ["Jibo", "JiboRevival"]
-TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
-NEW_URL = "https://oauth.reddit.com/r/{}/new?limit=25&raw_json=1".format("+".join(SUBREDDITS))
-USER_AGENT = "linux:jibodisc:1.0 (Jibo Revival Group Discord bot)"
-
-_token = {"value": None, "expires": 0.0}
-
-
-async def token(http, client_id: str, secret: str) -> str:
-    """An app-only OAuth token, reused until shortly before it expires."""
-    if _token["value"] and time.time() < _token["expires"] - 60:
-        return _token["value"]
-    async with http.post(TOKEN_URL, data={"grant_type": "client_credentials"},
-                         auth=aiohttp.BasicAuth(client_id, secret), headers={"User-Agent": USER_AGENT}) as response:
-        response.raise_for_status()
-        body = await response.json()
-    _token.update(value=body["access_token"], expires=time.time() + float(body.get("expires_in", 3600)))
-    return _token["value"]
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+# Each <shreddit-post> carries the post's data as attributes.
+_READ = """els => els.map(e => ({
+    id: e.id, title: e.getAttribute('post-title'), author: e.getAttribute('author'),
+    permalink: e.getAttribute('permalink'), type: e.getAttribute('post-type'), href: e.getAttribute('content-href')}))"""
 
 
-def parse_listing(listing: dict) -> list[dict[str, str]]:
-    """A /new listing -> posts oldest first as {id, title, author, subreddit, url, image}."""
+def to_posts(subreddit: str, raw: list[dict]) -> list[dict[str, str]]:
+    """Scraped <shreddit-post> attributes -> posts oldest first as {id, title, author, subreddit, url, image}."""
     posts = []
-    for child in listing.get("data", {}).get("children", []):
-        d = child.get("data", {})
-        if not d.get("id"):
-            continue
-        preview = (d.get("preview") or {}).get("images") or [{}]
-        image = (preview[0].get("source") or {}).get("url", "")
+    for r in raw:
+        if not (r.get("id") or "").startswith("t3_") or not r.get("permalink"):
+            continue  # ads and placeholders
         posts.append({
-            "id": d["id"],
-            "title": (d.get("title") or "").strip(),
-            "author": d.get("author") or "[deleted]",
-            "subreddit": d.get("subreddit") or "",
-            "url": "https://www.reddit.com" + (d.get("permalink") or "/"),
-            "image": image,
+            "id": r["id"][3:],
+            "title": (r.get("title") or "").strip(),
+            "author": r.get("author") or "[deleted]",
+            "subreddit": subreddit,
+            "url": "https://www.reddit.com" + r["permalink"],
+            "image": (r.get("href") or "") if r.get("type") == "image" else "",
         })
     return list(reversed(posts))
+
+
+async def fetch_new() -> list[dict[str, str]]:
+    """The newest posts of every followed subreddit. Raises if a page shows no posts (blocked or changed layout)."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        try:
+            page = await browser.new_page(user_agent=USER_AGENT, locale="en-US")
+            posts = []
+            for sub in SUBREDDITS:
+                await page.goto(f"https://www.reddit.com/r/{sub}/new/", wait_until="domcontentloaded", timeout=60000)
+                await page.wait_for_selector("shreddit-post", timeout=30000)
+                posts += to_posts(sub, await page.eval_on_selector_all("shreddit-post", _READ))
+            return posts
+        finally:
+            await browser.close()

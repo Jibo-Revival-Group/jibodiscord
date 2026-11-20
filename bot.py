@@ -46,7 +46,7 @@ def save_seen(seen: dict[str, list[str]]) -> None:
     tmp.replace(SEEN_FILE)
 
 
-@tasks.loop(minutes=5)
+@tasks.loop(minutes=1)  # YouTube feeds already lag minutes behind; checking often keeps that from adding up
 async def check_youtube() -> None:
     channel = client.get_channel(SOCIAL_MEDIA_CHANNEL_ID)
     if channel is None:

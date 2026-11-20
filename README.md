@@ -5,7 +5,7 @@ social-media channel and pings the YouTube ping role.
 
 ## How it works
 
-Every 5 minutes it reads each channel's public YouTube feed (no API key needed). A video it has not seen before gets one post.
+Every minute it reads each channel's public YouTube feed (no API key needed). A video it has not seen before gets one post.
 The videos it has seen are kept in `youtube-seen.json` next to `bot.py`. The first check of a channel only records what is
 already there, so nothing old is posted when the bot is first started or a channel is added.
 

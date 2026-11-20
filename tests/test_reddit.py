@@ -15,9 +15,9 @@ class RedditTest(unittest.TestCase):
     def test_posts_oldest_first_without_ads(self):
         self.assertEqual(reddit.to_posts("Jibo", RAW), [
             {"id": "a1", "title": "Older", "author": "[deleted]", "subreddit": "Jibo",
-             "url": "https://www.reddit.com/r/Jibo/comments/a1/y/", "summary": "Hi everyone! We made a wiki.", "image": ""},
+             "url": "https://www.reddit.com/r/Jibo/comments/a1/y/", "summary": "Hi everyone! We made a wiki.", "image": "", "video": ""},
             {"id": "b2", "title": "Newer", "author": "zane", "subreddit": "Jibo",
-             "url": "https://www.reddit.com/r/Jibo/comments/b2/x/", "summary": "", "image": "https://external-preview.redd.it/p.png"},
+             "url": "https://www.reddit.com/r/Jibo/comments/b2/x/", "summary": "", "image": "", "video": "https://v.redd.it/abc"},
         ])
 
     def test_long_summary_cut_at_a_word(self):

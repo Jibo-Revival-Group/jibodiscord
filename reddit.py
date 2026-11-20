@@ -1,6 +1,7 @@
 """New-post detection for the followed subreddits. Reddit blocks plain HTTP clients (no feeds, no JSON, and its
 API needs approval), so a headless Chromium loads each subreddit's /new page and reads the posts it shows."""
 
+import asyncio
 import re
 
 from playwright.async_api import async_playwright
@@ -19,7 +20,7 @@ _YOUTUBE = re.compile(r"(?:youtube\.com/watch\?(?:.*&)?v=|youtu\.be/|youtube\.co
 
 
 def to_posts(subreddit: str, raw: list[dict]) -> list[dict[str, str]]:
-    """Scraped <shreddit-post> data -> posts oldest first as {id, title, author, subreddit, url, summary, image}."""
+    """Scraped <shreddit-post> data -> posts oldest first as {id, title, author, subreddit, url, summary, image, video}."""
     posts = []
     for r in raw:
         if not (r.get("id") or "").startswith("t3_") or not r.get("permalink"):
@@ -32,6 +33,7 @@ def to_posts(subreddit: str, raw: list[dict]) -> list[dict[str, str]]:
             "url": "https://www.reddit.com" + r["permalink"],
             "summary": summary(r.get("body") or ""),
             "image": image(r),
+            "video": (r.get("href") or "") if (r.get("href") or "").startswith("https://v.redd.it/") else "",
         })
     return list(reversed(posts))
 
@@ -45,12 +47,28 @@ def summary(body: str) -> str:
 def image(r: dict) -> str:
     """A picture for the post: Reddit's media preview, the image itself, or a linked YouTube video's thumbnail."""
     href = r.get("href") or ""
+    if href.startswith("https://v.redd.it/"):
+        return ""  # Reddit's video poster is the (usually black) first frame; the bot grabs a later one instead
     if r.get("media"):
         return r["media"]
     if r.get("type") == "image":
         return href
     m = _YOUTUBE.search(href)
     return f"https://i.ytimg.com/vi/{m.group(1)}/hqdefault.jpg" if m else ""
+
+
+async def video_frame(video: str) -> bytes | None:
+    """A JPEG of a Reddit video one second in (best quality via its HLS playlist), or None if ffmpeg fails."""
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-v", "error", "-ss", "1", "-i", video.rstrip("/") + "/HLSPlaylist.m3u8", "-frames:v", "1",
+        "-q:v", "3", "-f", "image2", "-c:v", "mjpeg", "pipe:1",
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(), 60)
+    except asyncio.TimeoutError:
+        proc.kill()
+        return None
+    return out if proc.returncode == 0 and out else None
 
 
 async def fetch_new() -> list[dict[str, str]]:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """JiboDisc: posts in the social-media channel when a followed YouTube channel releases a video."""
 
+import io
 import json
 import logging
 import os
@@ -102,12 +103,18 @@ async def check_reddit() -> None:
         post = by_id[post_id]
         embed = discord.Embed(title=post["title"][:256] or "New post", url=post["url"], description=post["summary"] or None, color=0xFF4500)
         embed.set_author(name=f"u/{post['author']} in r/{post['subreddit']}", url=f"https://www.reddit.com/r/{post['subreddit']}")
-        if post["image"]:
+        files = []
+        frame = await reddit.video_frame(post["video"]) if post["video"] else None
+        if frame:
+            files.append(discord.File(io.BytesIO(frame), "preview.jpg"))
+            embed.set_image(url="attachment://preview.jpg")
+        elif post["image"]:
             embed.set_image(url=post["image"])
         try:
             await channel.send(
                 f"<@&{REDDIT_PING_ROLE_ID}> **u/{post['author']}** just posted in **r/{post['subreddit']}**! <{post['url']}>",
                 embed=embed,
+                files=files,
                 allowed_mentions=discord.AllowedMentions(roles=True),
             )
             log.info("Posted Reddit %s from r/%s", post_id, post["subreddit"])

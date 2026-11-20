@@ -12,6 +12,7 @@ from discord import app_commands
 from discord.ext import tasks
 from dotenv import load_dotenv
 
+import reddit
 import youtube
 
 load_dotenv()
@@ -28,6 +29,10 @@ DISCORD_GUILD_ID = int(os.environ["DISCORD_GUILD_ID"])
 SOCIAL_MEDIA_CHANNEL_ID = 1570894281538019368
 YOUTUBE_PING_ROLE_ID = 1570893128448213032
 SEEN_FILE = Path(__file__).with_name("youtube-seen.json")  # video IDs already handled, per channel
+REDDIT_PING_ROLE_ID = YOUTUBE_PING_ROLE_ID
+REDDIT_SEEN_KEY = "reddit"  # Reddit post IDs share the state file with the YouTube channels
+REDDIT_CLIENT_ID = os.environ.get("REDDIT_CLIENT_ID", "")
+REDDIT_SECRET = os.environ.get("REDDIT_SECRET", "")
 
 client = discord.Client(intents=discord.Intents.default())
 tree = app_commands.CommandTree(client)  # holds no commands; syncing it removes the old /ask and /ai
@@ -83,6 +88,43 @@ async def check_youtube() -> None:
             save_seen(seen)  # after each channel, so a crash never re-posts what was already sent
 
 
+@tasks.loop(minutes=1)
+async def check_reddit() -> None:
+    channel = client.get_channel(SOCIAL_MEDIA_CHANNEL_ID)
+    if channel is None:
+        return
+    seen = load_seen()
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as http:
+            access = await reddit.token(http, REDDIT_CLIENT_ID, REDDIT_SECRET)
+            headers = {"Authorization": f"bearer {access}", "User-Agent": reddit.USER_AGENT}
+            async with http.get(reddit.NEW_URL, headers=headers) as response:
+                response.raise_for_status()
+                posts = reddit.parse_listing(await response.json())
+    except Exception as exc:  # a Reddit outage must not stop the loop
+        reddit._token["value"] = None  # a rejected token is fetched again next time
+        log.warning("Reddit check failed: %s", exc)
+        return
+    by_id = {p["id"]: p for p in posts}
+    for post_id in youtube.new_videos(seen, REDDIT_SEEN_KEY, list(by_id)):
+        post = by_id[post_id]
+        embed = discord.Embed(title=post["title"][:256] or "New post", url=post["url"], color=0xFF4500)
+        embed.set_author(name=f"u/{post['author']} in r/{post['subreddit']}", url=f"https://www.reddit.com/r/{post['subreddit']}")
+        if post["image"]:
+            embed.set_image(url=post["image"])
+        try:
+            await channel.send(
+                f"<@&{REDDIT_PING_ROLE_ID}> **u/{post['author']}** just posted in **r/{post['subreddit']}**! <{post['url']}>",
+                embed=embed,
+                allowed_mentions=discord.AllowedMentions(roles=True),
+            )
+            log.info("Posted Reddit %s from r/%s", post_id, post["subreddit"])
+        except discord.HTTPException as exc:
+            seen[REDDIT_SEEN_KEY].remove(post_id)
+            log.error("Could not post Reddit %s: %s", post_id, exc)
+    save_seen(seen)
+
+
 @client.event
 async def on_ready() -> None:
     for guild in client.guilds:
@@ -93,7 +135,10 @@ async def on_ready() -> None:
     await tree.sync()
     if not check_youtube.is_running():
         check_youtube.start()
-    log.info("Logged in as %s, following %d YouTube channels", client.user, len(youtube.CHANNELS))
+    if REDDIT_CLIENT_ID and REDDIT_SECRET and not check_reddit.is_running():
+        check_reddit.start()
+    log.info("Logged in as %s, following %d YouTube channels and %s", client.user, len(youtube.CHANNELS),
+             "r/" + ", r/".join(reddit.SUBREDDITS) if check_reddit.is_running() else "no subreddits (REDDIT_CLIENT_ID/REDDIT_SECRET not set)")
 
 
 @client.event

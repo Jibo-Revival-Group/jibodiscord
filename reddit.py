@@ -1,18 +1,25 @@
 """New-post detection for the followed subreddits. Reddit blocks plain HTTP clients (no feeds, no JSON, and its
 API needs approval), so a headless Chromium loads each subreddit's /new page and reads the posts it shows."""
 
+import re
+
 from playwright.async_api import async_playwright
 
 SUBREDDITS = ["Jibo", "JiboRevival"]
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 # Each <shreddit-post> carries the post's data as attributes.
+# The text post's body and the media preview (video poster, image) are inside it.
 _READ = """els => els.map(e => ({
     id: e.id, title: e.getAttribute('post-title'), author: e.getAttribute('author'),
-    permalink: e.getAttribute('permalink'), type: e.getAttribute('post-type'), href: e.getAttribute('content-href')}))"""
+    permalink: e.getAttribute('permalink'), type: e.getAttribute('post-type'), href: e.getAttribute('content-href'),
+    body: (e.querySelector('[slot="text-body"]') || {}).innerText || '',
+    media: ([...e.querySelectorAll('img')].map(i => i.src).find(s => /(preview|i)\\.redd\\.it\\//.test(s)) || '')}))"""
+SUMMARY_LENGTH = 300
+_YOUTUBE = re.compile(r"(?:youtube\.com/watch\?(?:.*&)?v=|youtu\.be/|youtube\.com/shorts/)([\w-]{11})")
 
 
 def to_posts(subreddit: str, raw: list[dict]) -> list[dict[str, str]]:
-    """Scraped <shreddit-post> attributes -> posts oldest first as {id, title, author, subreddit, url, image}."""
+    """Scraped <shreddit-post> data -> posts oldest first as {id, title, author, subreddit, url, summary, image}."""
     posts = []
     for r in raw:
         if not (r.get("id") or "").startswith("t3_") or not r.get("permalink"):
@@ -23,9 +30,27 @@ def to_posts(subreddit: str, raw: list[dict]) -> list[dict[str, str]]:
             "author": r.get("author") or "[deleted]",
             "subreddit": subreddit,
             "url": "https://www.reddit.com" + r["permalink"],
-            "image": (r.get("href") or "") if r.get("type") == "image" else "",
+            "summary": summary(r.get("body") or ""),
+            "image": image(r),
         })
     return list(reversed(posts))
+
+
+def summary(body: str) -> str:
+    """The post's text squeezed to one short paragraph for the embed."""
+    text = " ".join(body.split())
+    return text if len(text) <= SUMMARY_LENGTH else text[:SUMMARY_LENGTH].rsplit(" ", 1)[0] + "…"
+
+
+def image(r: dict) -> str:
+    """A picture for the post: Reddit's media preview, the image itself, or a linked YouTube video's thumbnail."""
+    href = r.get("href") or ""
+    if r.get("media"):
+        return r["media"]
+    if r.get("type") == "image":
+        return href
+    m = _YOUTUBE.search(href)
+    return f"https://i.ytimg.com/vi/{m.group(1)}/hqdefault.jpg" if m else ""
 
 
 async def fetch_new() -> list[dict[str, str]]:

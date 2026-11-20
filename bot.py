@@ -100,7 +100,7 @@ async def check_reddit() -> None:
     by_id = {p["id"]: p for p in posts}
     for post_id in youtube.new_videos(seen, REDDIT_SEEN_KEY, list(by_id)):
         post = by_id[post_id]
-        embed = discord.Embed(title=post["title"][:256] or "New post", url=post["url"], color=0xFF4500)
+        embed = discord.Embed(title=post["title"][:256] or "New post", url=post["url"], description=post["summary"] or None, color=0xFF4500)
         embed.set_author(name=f"u/{post['author']} in r/{post['subreddit']}", url=f"https://www.reddit.com/r/{post['subreddit']}")
         if post["image"]:
             embed.set_image(url=post["image"])

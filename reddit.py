@@ -3,6 +3,7 @@ API needs approval), so a headless Chromium loads each subreddit's /new page and
 
 import asyncio
 import re
+from datetime import datetime, timedelta, timezone
 
 from playwright.async_api import async_playwright
 
@@ -13,9 +14,12 @@ USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Ge
 _READ = """els => els.map(e => ({
     id: e.id, title: e.getAttribute('post-title'), author: e.getAttribute('author'),
     permalink: e.getAttribute('permalink'), type: e.getAttribute('post-type'), href: e.getAttribute('content-href'),
+    created: e.getAttribute('created-timestamp'),
     body: (e.querySelector('[slot="text-body"]') || {}).innerText || '',
     media: ([...e.querySelectorAll('img')].map(i => i.src).find(s => /(preview|i)\\.redd\\.it\\//.test(s)) || '')}))"""
 SUMMARY_LENGTH = 300
+# /new only lists a few posts at first, so an old post can show up as "unseen" later; only newer ones get posted.
+MAX_AGE = timedelta(days=1)
 _YOUTUBE = re.compile(r"(?:youtube\.com/watch\?(?:.*&)?v=|youtu\.be/|youtube\.com/shorts/)([\w-]{11})")
 
 
@@ -32,10 +36,20 @@ def to_posts(subreddit: str, raw: list[dict]) -> list[dict[str, str]]:
             "subreddit": subreddit,
             "url": "https://www.reddit.com" + r["permalink"],
             "summary": summary(r.get("body") or ""),
+            "created": r.get("created") or "",
             "image": image(r),
             "video": (r.get("href") or "") if (r.get("href") or "").startswith("https://v.redd.it/") else "",
         })
     return list(reversed(posts))
+
+
+def is_recent(post: dict, now: datetime | None = None) -> bool:
+    """Posted within MAX_AGE. A missing or unreadable timestamp counts as old, so it is never announced."""
+    try:
+        created = datetime.strptime(post["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
+    except (KeyError, ValueError):
+        return False
+    return (now or datetime.now(timezone.utc)) - created <= MAX_AGE
 
 
 def summary(body: str) -> str:

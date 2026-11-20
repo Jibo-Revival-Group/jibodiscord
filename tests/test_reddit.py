@@ -15,10 +15,17 @@ class RedditTest(unittest.TestCase):
     def test_posts_oldest_first_without_ads(self):
         self.assertEqual(reddit.to_posts("Jibo", RAW), [
             {"id": "a1", "title": "Older", "author": "[deleted]", "subreddit": "Jibo",
-             "url": "https://www.reddit.com/r/Jibo/comments/a1/y/", "summary": "Hi everyone! We made a wiki.", "image": "", "video": ""},
+             "url": "https://www.reddit.com/r/Jibo/comments/a1/y/", "summary": "Hi everyone! We made a wiki.", "created": "", "image": "", "video": ""},
             {"id": "b2", "title": "Newer", "author": "zane", "subreddit": "Jibo",
-             "url": "https://www.reddit.com/r/Jibo/comments/b2/x/", "summary": "", "image": "", "video": "https://v.redd.it/abc"},
+             "url": "https://www.reddit.com/r/Jibo/comments/b2/x/", "summary": "", "created": "", "image": "", "video": "https://v.redd.it/abc"},
         ])
+
+    def test_only_recent_posts_count(self):
+        from datetime import datetime, timezone
+        now = datetime(2026, 11, 20, 22, 0, tzinfo=timezone.utc)
+        self.assertTrue(reddit.is_recent({"created": "2026-11-20T21:55:00.000000+0000"}, now))
+        self.assertFalse(reddit.is_recent({"created": "2026-10-30T02:48:00.000000+0000"}, now))
+        self.assertFalse(reddit.is_recent({"created": ""}, now))
 
     def test_long_summary_cut_at_a_word(self):
         s = reddit.summary("word " * 100)

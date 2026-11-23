@@ -21,6 +21,16 @@ class YouTubeTest(unittest.TestCase):
         self.assertEqual(youtube.new_videos(seen, "@a", ["older", "newest"]), [])
         self.assertEqual(youtube.new_videos(seen, "@b", ["older"]), [])  # a channel added later starts quiet too
 
+    def test_stream_state(self):
+        # Trimmed from real watch pages (Miraenda, Nov 2026): announced stream, a stream on air, an ended one, a video.
+        upcoming = '"playabilityStatus":{"status":"LIVE_STREAM_OFFLINE","reason":"This live event will begin in 46 minutes."'
+        live = '"liveBroadcastDetails":{"isLiveNow":true,"startTimestamp":"2026-11-23T03:30:00+00:00"},"playabilityStatus":{"status":"OK"'
+        ended = '"liveBroadcastDetails":{"isLiveNow":false,"startTimestamp":"2026-11-22T03:29:56+00:00","endTimestamp":"2026-11-22T04:00:19+00:00"}'
+        self.assertEqual(youtube.stream_state(upcoming), "upcoming")
+        self.assertEqual(youtube.stream_state(live), "live")
+        self.assertIsNone(youtube.stream_state(ended))
+        self.assertIsNone(youtube.stream_state('"isLiveContent":false,"playabilityStatus":{"status":"OK"'))
+
     def test_seven_channels(self):
         self.assertEqual(len(youtube.CHANNELS), 7)
         self.assertTrue(all(i.startswith("UC") and len(i) == 24 for i in youtube.CHANNELS.values()))

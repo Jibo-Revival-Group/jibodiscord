@@ -29,6 +29,8 @@ DISCORD_GUILD_ID = int(os.environ["DISCORD_GUILD_ID"])
 
 SOCIAL_MEDIA_CHANNEL_ID = 1570894281538019368
 YOUTUBE_PING_ROLE_ID = 1570893128448213032
+# SOCS=CAI skips the EU cookie page, which has none of the live-stream details
+WATCH_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36", "Cookie": "SOCS=CAI"}
 SEEN_FILE = Path(__file__).with_name("youtube-seen.json")  # video IDs already handled, per channel
 REDDIT_PING_ROLE_ID = YOUTUBE_PING_ROLE_ID
 REDDIT_SEEN_KEY = "reddit"  # Reddit post IDs share the state file with the YouTube channels
@@ -69,14 +71,26 @@ async def check_youtube() -> None:
             name = name or handle
             titles = {v["id"]: v["title"] for v in videos}
             for video_id in youtube.new_videos(seen, handle, list(titles)):
-                url = f"https://www.youtube.com/watch?v={video_id}"
+                url = youtube.WATCH_URL.format(video_id)
+                try:
+                    async with http.get(url, headers=WATCH_HEADERS) as response:
+                        response.raise_for_status()
+                        state = youtube.stream_state(await response.text())
+                except Exception as exc:  # unknown yet: forget it again so the next check looks once more
+                    seen[handle].remove(video_id)
+                    log.warning("Watch page check failed for %s: %s", video_id, exc)
+                    continue
+                if state == "upcoming":  # announced, not started: check again every minute until it goes live
+                    seen[handle].remove(video_id)
+                    continue
                 embed = discord.Embed(title=titles[video_id] or "New video", url=url, color=0xFF0000)
                 embed.set_author(name=name, url=f"https://www.youtube.com/channel/{channel_id}")
                 embed.set_image(url=f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
                 try:
                     # <link> keeps the link in the message without a second preview; it still works if embeds are not allowed
                     await channel.send(
-                        f"<@&{YOUTUBE_PING_ROLE_ID}> **{name}** just released a new video! <{url}>",
+                        f"<@&{YOUTUBE_PING_ROLE_ID}> **{name}** "
+                        + ("is live now!" if state == "live" else "just released a new video!") + f" <{url}>",
                         embed=embed,
                         allowed_mentions=discord.AllowedMentions(roles=True),
                     )

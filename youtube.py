@@ -13,6 +13,7 @@ CHANNELS = {
     "@nttdisruption8913": "UC_FJ3fcLPTLbT9Fg5KnW1RA",
 }
 FEED_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
+WATCH_URL = "https://www.youtube.com/watch?v={}"
 _NS = {"a": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015"}
 
 
@@ -34,3 +35,13 @@ def new_videos(seen: dict[str, list[str]], channel: str, ids: list[str]) -> list
     fresh = [i for i in ids if i not in known]
     seen[channel] += fresh
     return [] if first else fresh
+
+
+def stream_state(watch_html: str) -> str | None:
+    """From a watch page: "upcoming" for a scheduled live stream that hasn't started (the feed lists it as soon as it
+    is announced), "live" while it runs, None for a normal video or a finished stream."""
+    if '"isLiveNow":true' in watch_html:
+        return "live"
+    if '"status":"LIVE_STREAM_OFFLINE"' in watch_html:
+        return "upcoming"
+    return None

@@ -30,6 +30,8 @@ class YouTubeTest(unittest.TestCase):
         self.assertEqual(youtube.stream_state(live), "live")
         self.assertIsNone(youtube.stream_state(ended))
         self.assertIsNone(youtube.stream_state('"isLiveContent":false,"playabilityStatus":{"status":"OK"'))
+        self.assertEqual(youtube.scheduled_start('"isUpcoming":true,"scheduledStartTime":"1795404600"'), 1795404600)
+        self.assertIsNone(youtube.scheduled_start(live))
 
     def test_seven_channels(self):
         self.assertEqual(len(youtube.CHANNELS), 7)

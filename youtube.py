@@ -1,5 +1,6 @@
 """New-video detection from YouTube's public channel feeds (no API key needed)."""
 
+import re
 import xml.etree.ElementTree as ET
 
 # The channels JiboDisc follows: handle -> channel ID (the feed address needs the ID, not the handle).
@@ -45,3 +46,9 @@ def stream_state(watch_html: str) -> str | None:
     if '"status":"LIVE_STREAM_OFFLINE"' in watch_html:
         return "upcoming"
     return None
+
+
+def scheduled_start(watch_html: str) -> int | None:
+    """An upcoming stream's start time (Unix seconds) from its watch page, or None."""
+    found = re.search(r'"scheduledStartTime":"(\d+)"', watch_html)
+    return int(found.group(1)) if found else None

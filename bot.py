@@ -33,6 +33,7 @@ YOUTUBE_PING_ROLE_ID = 1570893128448213032
 WATCH_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36", "Cookie": "SOCS=CAI"}
 SEEN_FILE = Path(__file__).with_name("youtube-seen.json")  # video IDs already handled, per channel
 REDDIT_PING_ROLE_ID = YOUTUBE_PING_ROLE_ID
+UPCOMING_SEEN_KEY = "upcoming"  # streams whose "will go live" notice was already sent
 REDDIT_SEEN_KEY = "reddit"  # Reddit post IDs share the state file with the YouTube channels
 
 client = discord.Client(intents=discord.Intents.default())
@@ -75,17 +76,27 @@ async def check_youtube() -> None:
                 try:
                     async with http.get(url, headers=WATCH_HEADERS) as response:
                         response.raise_for_status()
-                        state = youtube.stream_state(await response.text())
+                        page = await response.text()
+                        state = youtube.stream_state(page)
                 except Exception as exc:  # unknown yet: forget it again so the next check looks once more
                     seen[handle].remove(video_id)
                     log.warning("Watch page check failed for %s: %s", video_id, exc)
                     continue
-                if state == "upcoming":  # announced, not started: check again every minute until it goes live
-                    seen[handle].remove(video_id)
-                    continue
                 embed = discord.Embed(title=titles[video_id] or "New video", url=url, color=0xFF0000)
                 embed.set_author(name=name, url=f"https://www.youtube.com/channel/{channel_id}")
                 embed.set_image(url=f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
+                if state == "upcoming":  # announced, not started: check again every minute until it goes live
+                    seen[handle].remove(video_id)
+                    start = youtube.scheduled_start(page)
+                    if start and video_id not in seen.setdefault(UPCOMING_SEEN_KEY, []):
+                        try:  # once, no ping; <t:...:R> is Discord's live countdown ("in 50 minutes")
+                            await channel.send(f"**{name}** will go live <t:{start}:R>! <{url}>", embed=embed,
+                                               allowed_mentions=discord.AllowedMentions.none())
+                            seen[UPCOMING_SEEN_KEY].append(video_id)
+                            log.info("Posted upcoming %s from %s", video_id, handle)
+                        except discord.HTTPException as exc:
+                            log.error("Could not post upcoming %s from %s: %s", video_id, handle, exc)
+                    continue
                 try:
                     # <link> keeps the link in the message without a second preview; it still works if embeds are not allowed
                     await channel.send(

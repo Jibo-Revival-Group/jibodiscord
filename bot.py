@@ -43,11 +43,19 @@ client = discord.Client(intents=discord.Intents.default())
 tree = app_commands.CommandTree(client)  # holds no commands; syncing it removes the old /ask and /ai
 
 
+_seen: dict[str, list[str]] | None = None
+
+
 def load_seen() -> dict[str, list[str]]:
-    try:
-        return json.loads(SEEN_FILE.read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+    """The one shared state. The loops overlap (each awaits the network), so a copy per loop would let one loop's
+    save overwrite what another just recorded, and that post would be sent again."""
+    global _seen
+    if _seen is None:
+        try:
+            _seen = json.loads(SEEN_FILE.read_text())
+        except (FileNotFoundError, json.JSONDecodeError):
+            _seen = {}
+    return _seen
 
 
 def save_seen(seen: dict[str, list[str]]) -> None:

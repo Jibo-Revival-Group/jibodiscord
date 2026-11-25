@@ -185,11 +185,19 @@ async def check_forum() -> None:
         started = post["number"] == 1
         embed = discord.Embed(title=post["title"][:256] or "Forum post", url=post["url"], description=post["summary"] or None, color=0x1C9AD6)
         embed.set_author(name=post["author"], url=forum.FORUM_URL, icon_url=post["avatar"] or None)
+        files = []
+        if post["image"]:
+            embed.set_image(url=post["image"])
+        elif post["video"]:
+            frame = await reddit.frame(post["video"], forum.HEADERS["User-Agent"])
+            if frame:
+                files.append(discord.File(io.BytesIO(frame), "preview.jpg"))
+                embed.set_image(url="attachment://preview.jpg")
         # A new discussion pings the role like a Reddit post; replies don't, so a busy thread can't spam the ping.
         text = (f"<@&{REDDIT_PING_ROLE_ID}> **{post['author']}** started a discussion on the forum! <{post['url']}>" if started
                 else f"**{post['author']}** replied on the forum. <{post['url']}>")
         try:
-            await channel.send(text, embed=embed, allowed_mentions=discord.AllowedMentions(roles=started))
+            await channel.send(text, embed=embed, files=files, allowed_mentions=discord.AllowedMentions(roles=started))
             log.info("Posted forum post %s", post_id)
         except discord.HTTPException as exc:
             seen[FORUM_SEEN_KEY].remove(post_id)

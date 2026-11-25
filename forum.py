@@ -34,9 +34,24 @@ def to_posts(doc: dict) -> list[dict]:
             "avatar": user.get("avatarUrl") or "",
             "url": f"{FORUM_URL}/d/{discussion_id}/{a.get('number') or 1}",
             "summary": summary(a.get("contentHtml") or ""),
+            **media(a.get("contentHtml") or ""),
             "created": a.get("createdAt") or "",
         })
     return list(reversed(posts))
+
+
+_UPLOADED_IMAGE = re.compile(r'<a href="([^"]+)"[^>]*class="FoFUpload--Upl-Image-Preview-Link"')
+_IMAGE = re.compile(r'<img(?![^>]*class="emoji")[^>]*\ssrc="(https?://[^"]+)"')
+_UPLOADED_FILE = re.compile(r'data-fof-upload-download-uuid="([\w-]+)"')
+
+
+def media(content_html: str) -> dict[str, str]:
+    """The post's first picture (an upload at full size, else any image) and its first uploaded file, which on this
+    forum can only be a video (uploads are limited to images and videos). Links are made absolute."""
+    content_html = html.unescape(content_html)
+    image = _UPLOADED_IMAGE.search(content_html) or _IMAGE.search(content_html)
+    video = _UPLOADED_FILE.search(content_html)
+    return {"image": image.group(1) if image else "", "video": f"{FORUM_URL}/api/fof/download/{video.group(1)}" if video else ""}
 
 
 def summary(content_html: str) -> str:

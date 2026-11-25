@@ -73,8 +73,13 @@ def image(r: dict) -> str:
 
 async def video_frame(video: str) -> bytes | None:
     """A JPEG of a Reddit video one second in (best quality via its HLS playlist), or None if ffmpeg fails."""
+    return await frame(video.rstrip("/") + "/HLSPlaylist.m3u8")
+
+
+async def frame(source: str, user_agent: str = USER_AGENT) -> bytes | None:
+    """A JPEG of a video (file or URL) one second in, or None if ffmpeg fails."""
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-v", "error", "-ss", "1", "-i", video.rstrip("/") + "/HLSPlaylist.m3u8", "-frames:v", "1",
+        "ffmpeg", "-v", "error", "-user_agent", user_agent, "-ss", "1", "-i", source, "-frames:v", "1",
         "-q:v", "3", "-f", "image2", "-c:v", "mjpeg", "pipe:1",
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
     try:

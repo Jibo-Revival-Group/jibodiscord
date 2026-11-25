@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""JiboDisc: posts in the social-media channel when a followed YouTube channel releases a video."""
+"""JiboDisc: posts in the social-media channel when a followed YouTube channel releases a video, a followed subreddit
+or the forum gets a new post, or someone replies on the forum."""
 
 import io
 import json
@@ -13,6 +14,7 @@ from discord import app_commands
 from discord.ext import tasks
 from dotenv import load_dotenv
 
+import forum
 import reddit
 import youtube
 
@@ -35,6 +37,7 @@ SEEN_FILE = Path(__file__).with_name("youtube-seen.json")  # video IDs already h
 REDDIT_PING_ROLE_ID = YOUTUBE_PING_ROLE_ID
 UPCOMING_SEEN_KEY = "upcoming"  # streams whose "will go live" notice was already sent
 REDDIT_SEEN_KEY = "reddit"  # Reddit post IDs share the state file with the YouTube channels
+FORUM_SEEN_KEY = "forum"
 
 client = discord.Client(intents=discord.Intents.default())
 tree = app_commands.CommandTree(client)  # holds no commands; syncing it removes the old /ask and /ai
@@ -152,6 +155,40 @@ async def check_reddit() -> None:
     save_seen(seen)
 
 
+@tasks.loop(minutes=1)
+async def check_forum() -> None:
+    channel = client.get_channel(SOCIAL_MEDIA_CHANNEL_ID)
+    if channel is None:
+        return
+    seen = load_seen()
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30), headers=forum.HEADERS) as http:
+            async with http.get(forum.API_URL) as response:
+                response.raise_for_status()
+                posts = forum.to_posts(await response.json(content_type=None))
+    except Exception as exc:  # a forum outage must not stop the loop
+        log.warning("Forum check failed: %s", exc)
+        return
+    by_id = {p["id"]: p for p in posts}
+    for post_id in youtube.new_videos(seen, FORUM_SEEN_KEY, list(by_id)):
+        post = by_id[post_id]
+        if not forum.is_recent(post):
+            continue
+        started = post["number"] == 1
+        embed = discord.Embed(title=post["title"][:256] or "Forum post", url=post["url"], description=post["summary"] or None, color=0x1C9AD6)
+        embed.set_author(name=post["author"], url=forum.FORUM_URL, icon_url=post["avatar"] or None)
+        # A new discussion pings the role like a Reddit post; replies don't, so a busy thread can't spam the ping.
+        text = (f"<@&{REDDIT_PING_ROLE_ID}> **{post['author']}** started a discussion on the forum! <{post['url']}>" if started
+                else f"**{post['author']}** replied on the forum. <{post['url']}>")
+        try:
+            await channel.send(text, embed=embed, allowed_mentions=discord.AllowedMentions(roles=started))
+            log.info("Posted forum post %s", post_id)
+        except discord.HTTPException as exc:
+            seen[FORUM_SEEN_KEY].remove(post_id)
+            log.error("Could not post forum post %s: %s", post_id, exc)
+    save_seen(seen)
+
+
 @client.event
 async def on_ready() -> None:
     for guild in client.guilds:
@@ -164,7 +201,10 @@ async def on_ready() -> None:
         check_youtube.start()
     if not check_reddit.is_running():
         check_reddit.start()
-    log.info("Logged in as %s, following %d YouTube channels and r/%s", client.user, len(youtube.CHANNELS), ", r/".join(reddit.SUBREDDITS))
+    if not check_forum.is_running():
+        check_forum.start()
+    log.info("Logged in as %s, following %d YouTube channels, r/%s and %s", client.user, len(youtube.CHANNELS),
+             ", r/".join(reddit.SUBREDDITS), forum.FORUM_URL)
 
 
 @client.event
